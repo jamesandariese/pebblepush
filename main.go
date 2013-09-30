@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"log"
 	"time"
+	"flag"
 )
 
 type PebbleMessage struct {
@@ -116,10 +117,13 @@ func pusher(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
+var addr = flag.String("addr", ":8088", "http service address")
 func main() {
+	flag.Parse()
 	http.HandleFunc("/pull", puller)
 	http.HandleFunc("/push", pusher)
-	err := http.ListenAndServe(":8085", nil)
+	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}
