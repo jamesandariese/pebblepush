@@ -15,7 +15,7 @@ type PebbleMessage struct {
 
 type PebbleResponse struct {
 	Response interface{} `json:"response"`
-	Drops int `json:"dropped",omitempty`
+	Drops int `json:"dropped,omitempty"`
 }
 
 var (
