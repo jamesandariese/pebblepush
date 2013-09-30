@@ -46,6 +46,20 @@ func puller(w http.ResponseWriter, r *http.Request) {
 	select {
 	case msg := <-c:
 		// FIXME: this is a race condition if multiple threads are enabled.
+		//        if there are two messages on this queue and two readers appear,
+		//        this block will run in parallel causing one message to go to one
+		//        and the other to go to the other.  This will be followed by this
+		//        locked section.  Essentially, if the behavior which this block
+		//        is meant to protect against is actually seen (a failed read followed
+		//        by a good read which occur in a short time frame), then if the
+		//        channel had two items on it, one item will be sunk into the bad read
+		//        which will then block immediately while the good read finishes and
+		//        then it will acquire the lock and proceed to do nothing with the
+		//        message, discarding it into a dead ResponseWriter.
+		//        Maybe FIXME is a bit strong of a term considering the fact that
+		//        I don't plan to fix it unless I completely change how this works.
+		//        It's *super* unlikely to happen and I'm fairly certain it's impossible
+		//        unless golang becomes multithreaded by default.
 		// FIXME: this shouldn't be a global lock since it's a per user requirement
 		pebbleWriteLock <- 1
 		defer func() {
@@ -53,6 +67,7 @@ func puller(w http.ResponseWriter, r *http.Request) {
 		}()
 		b, _ := json.Marshal(&PebbleResponse{Response: msg})
 		w.Write(b)
+		// Forward the message on to the concurrent requests
 		outer: for {
 			select {
 			case alt <- msg:
@@ -70,7 +85,9 @@ func puller(w http.ResponseWriter, r *http.Request) {
 		b, _ := json.Marshal(&PebbleResponse{Response: msg})
 		w.Write(b)
 	case <- time.After(30 * time.Second):
+		// timeout after 30 seconds
 		b, _ := json.Marshal(&PebbleResponse{Response: "timeout"})
+		w.WriteHeader(408)
 		w.Write(b)
 	}
 }
@@ -84,6 +101,8 @@ func pusher(w http.ResponseWriter, r *http.Request) {
      	msg := &PebbleMessage{r.FormValue("title"), r.FormValue("message")}
 	c, _ := getUserChan(r.FormValue("user"))
 	drops := 0
+	// Loop over the channel until there is room.  Count the number of drops so it can
+	// be reported in case the caller cares (maybe wants to back off or report it to the user)
 	outer: for {
 		select {
 		case c <- msg:
