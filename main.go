@@ -2,28 +2,27 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"net/http"
-	"log"
-	"time"
 	"flag"
+	"log"
+	"net/http"
+	"time"
 )
 
 type PebbleMessage struct {
-	Title string `json:"title"`
+	Title   string `json:"title"`
 	Message string `json:"message"`
 }
 
 type PebbleResponse struct {
 	Response interface{} `json:"response"`
-	Drops int `json:"dropped,omitempty"`
+	Drops    int         `json:"dropped,omitempty"`
 }
 
 var (
-	pebbleUsers map[string]chan *PebbleMessage = map[string]chan *PebbleMessage{}
+	pebbleUsers     map[string]chan *PebbleMessage = map[string]chan *PebbleMessage{}
 	pebbleAlternate map[string]chan *PebbleMessage = map[string]chan *PebbleMessage{}
-	pebbleUsersLock chan int = make(chan int, 1)
-	pebbleWriteLock chan int = make(chan int, 1)
+	pebbleUsersLock chan int                       = make(chan int, 1)
+	pebbleWriteLock chan int                       = make(chan int, 1)
 )
 
 func getUserChan(user string) (chan *PebbleMessage, chan *PebbleMessage) {
@@ -31,7 +30,7 @@ func getUserChan(user string) (chan *PebbleMessage, chan *PebbleMessage) {
 	pebbleUsersLock <- 1
 	// and unlock it when we exit
 	defer func() {
-		<- pebbleUsersLock
+		<-pebbleUsersLock
 	}()
 	if c, ok := pebbleUsers[user]; ok {
 		return c, pebbleAlternate[user]
@@ -69,7 +68,8 @@ func puller(w http.ResponseWriter, r *http.Request) {
 		b, _ := json.Marshal(&PebbleResponse{Response: msg})
 		w.Write(b)
 		// Forward the message on to the concurrent requests
-		outer: for {
+	outer:
+		for {
 			select {
 			case alt <- msg:
 			default:
@@ -85,7 +85,7 @@ func puller(w http.ResponseWriter, r *http.Request) {
 		// this is required because the err response from RequestWriter is unreliable.
 		b, _ := json.Marshal(&PebbleResponse{Response: msg})
 		w.Write(b)
-	case <- time.After(30 * time.Second):
+	case <-time.After(30 * time.Second):
 		// timeout after 30 seconds
 		b, _ := json.Marshal(&PebbleResponse{Response: "timeout"})
 		w.WriteHeader(408)
@@ -99,12 +99,13 @@ func pusher(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		<-pebbleWriteLock
 	}()
-     	msg := &PebbleMessage{r.FormValue("title"), r.FormValue("message")}
+	msg := &PebbleMessage{r.FormValue("title"), r.FormValue("message")}
 	c, _ := getUserChan(r.FormValue("user"))
 	drops := 0
 	// Loop over the channel until there is room.  Count the number of drops so it can
 	// be reported in case the caller cares (maybe wants to back off or report it to the user)
-	outer: for {
+outer:
+	for {
 		select {
 		case c <- msg:
 			b, _ := json.Marshal(&PebbleResponse{Response: "success", Drops: drops})
@@ -117,8 +118,8 @@ func pusher(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 var addr = flag.String("addr", ":8088", "http service address")
+
 func main() {
 	flag.Parse()
 	http.HandleFunc("/pull", puller)
