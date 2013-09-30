@@ -36,7 +36,7 @@ func getUserChan(user string) (chan *PebbleMessage, chan *PebbleMessage) {
 		return c, pebbleAlternate[user]
 	}
 	pebbleUsers[user] = make(chan *PebbleMessage, 100) // buffer up to 100 messages
-	pebbleUsers[user] <- &PebbleMessage{"message title", "Here's my message to you!"}
+	pebbleUsers[user] <- &PebbleMessage{"PebblePush", "Service started.\nIf you had pending messages, they may be lost.  If you are a new user, welcome!"}
 	pebbleAlternate[user] = make(chan *PebbleMessage) // these are alternates which are also listening at the same time.
 	return pebbleUsers[user], pebbleAlternate[user]
 }
