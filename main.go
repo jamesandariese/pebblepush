@@ -43,6 +43,7 @@ func getUserChan(user string) (chan *PebbleMessage, chan *PebbleMessage) {
 
 func puller(w http.ResponseWriter, r *http.Request) {
 	c, alt := getUserChan(r.FormValue("user"))
+        log.Println("Starting request for", r.FormValue("user"))
 	select {
 	case msg := <-c:
 		// FIXME: this is a race condition if multiple threads are enabled.
@@ -67,6 +68,7 @@ func puller(w http.ResponseWriter, r *http.Request) {
 		}()
 		b, _ := json.Marshal(&PebbleResponse{Response: msg})
 		w.Write(b)
+                log.Println("sent", b, "to", r.FormValue("user"))
 		// Forward the message on to the concurrent requests
 	outer:
 		for {
@@ -85,11 +87,13 @@ func puller(w http.ResponseWriter, r *http.Request) {
 		// this is required because the err response from RequestWriter is unreliable.
 		b, _ := json.Marshal(&PebbleResponse{Response: msg})
 		w.Write(b)
+                log.Println("sent", b, "to", r.FormValue("user"))
 	case <-time.After(30 * time.Second):
 		// timeout after 30 seconds
 		b, _ := json.Marshal(&PebbleResponse{Response: "timeout"})
 		w.WriteHeader(408)
 		w.Write(b)
+                log.Println("timed out for", r.FormValue("user"))
 	}
 }
 
@@ -110,6 +114,7 @@ outer:
 		case c <- msg:
 			b, _ := json.Marshal(&PebbleResponse{Response: "success", Drops: drops})
 			w.Write(b)
+                        log.Println("queued", msg)
 			break outer
 		default:
 			<-c
